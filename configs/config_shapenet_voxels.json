@@ -1,7 +1,7 @@
 {
     "id": "shapenet_voxels_experiment",
     "dataset": "shapenet_voxels",
-    "path_to_data": "",
+    "path_to_data": "datasets/shapenet_voxels/shapenet_voxels",
     "resolution": 32,
     "training": {
         "epochs": 200,
@@ -10,8 +10,8 @@
         "lr": 2e-5,
         "lr_disc": 8e-5,
         "r1_weight": 10.0,
-        "print_freq": 50,
-        "model_save_freq": 50
+        "print_freq": 5,
+        "model_save_freq": 1
     },
     "generator": {
         "layer_sizes": [128, 128, 128],

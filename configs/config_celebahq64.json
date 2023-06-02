@@ -1,17 +1,17 @@
 {
   "id": "celebahq64_experiment",
   "dataset": "celebahq",
-  "path_to_data": "",
+  "path_to_data": "datasets/downloaded",
   "resolution": 64,
   "training": {
     "epochs": 300,
-    "batch_size": 64,
+    "batch_size": 48,
     "max_num_points": null,
     "lr": 1e-4,
     "lr_disc": 4e-4,
     "r1_weight": 10.0,
     "print_freq": 50,
-    "model_save_freq": 50
+    "model_save_freq": 1
   },
   "generator": {
     "layer_sizes": [128, 128, 128],

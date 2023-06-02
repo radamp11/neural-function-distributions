@@ -261,8 +261,8 @@ def load_function_distribution(device, path):
     encoding = config_rep["encoding"].to(device)
     if hasattr(encoding, 'frequency_matrix'):
         encoding.frequency_matrix = encoding.frequency_matrix.to(device)
-    function_representation = FunctionRepresentation(config_rep["input_dim"],
-                                                     config_rep["output_dim"],
+    function_representation = FunctionRepresentation(config_rep["coordinate_dim"],
+                                                     config_rep["feature_dim"],
                                                      config_rep["layer_sizes"],
                                                      encoding,
                                                      config_rep["non_linearity"],

@@ -1,7 +1,7 @@
 {
     "id": "celebahq128_experiment",
     "dataset": "celebahq",
-    "path_to_data": "",
+    "path_to_data": "datasets/celebAHQ/data128x128",
     "resolution": 128,
     "training": {
         "epochs": 300,
@@ -11,7 +11,7 @@
         "lr_disc": 4e-4,
         "r1_weight": 10.0,
         "print_freq": 50,
-        "model_save_freq": 50
+        "model_save_freq": 1
     },
     "generator": {
         "layer_sizes": [128, 128, 128],

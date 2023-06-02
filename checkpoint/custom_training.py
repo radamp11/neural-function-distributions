@@ -5,7 +5,7 @@ from torchvision.utils import save_image
 from datetime import datetime
 
 
-class Trainer():
+class CustomTrainer():
     """Trains a function distribution.
 
     Args:
@@ -30,8 +30,11 @@ class Trainer():
         model_save_freq (int): Frequency (in epochs) at which to save model.
     """
 
-    def __init__(self, device, function_distribution, discriminator,
-                 data_converter, lr=2e-4, lr_disc=2e-4, betas=(0.5, 0.999),
+
+    # loads saved optimizers instead of instantiating them
+
+    def __init__(self, device, function_distribution, optimizer, discriminator, optimizer_disc,
+                 data_converter, epoch=0, lr=2e-4, lr_disc=2e-4, betas=(0.5, 0.999),
                  r1_weight=0, max_num_points=None, is_voxel=False,
                  is_point_cloud=False, is_era5=False, print_freq=1, save_dir='',
                  model_save_freq=0):
@@ -45,18 +48,15 @@ class Trainer():
         self.is_point_cloud = is_point_cloud
         self.is_era5 = is_era5
 
+        self.epoch = epoch
+
         self.bce = torch.nn.BCELoss()
 
         # We only want to learn weights of hypernetwork (i.e. forward_layers)
         # not of function representation itself
-        self.optimizer = torch.optim.Adam(
-            self.function_distribution.hypernetwork.forward_layers.parameters(),
-            lr=lr, betas=betas
-        )
+        self.optimizer = optimizer
         # Optimizer for discriminator
-        self.optimizer_disc = torch.optim.Adam(
-            self.discriminator.parameters(), lr=lr_disc, betas=betas
-        )
+        self.optimizer_disc = optimizer_disc
 
         self.print_freq = print_freq
         self.save_dir = save_dir
@@ -142,7 +142,7 @@ class Trainer():
                     'optimizer': self.optimizer.state_dict()
                 },
                 'discriminator': {
-                    'model': self.discriminator.state_dict(),
+                    'state_dict': self.discriminator.state_dict(),
                     'optimizer': self.optimizer_disc.state_dict()
                 }
             }, path + '/training_checkpoint_{}.pt'.format(epoch))
@@ -172,7 +172,7 @@ class Trainer():
                 save_image(real_samples, self.save_dir + "/ground_truth.png",
                            nrow=self.num_samples_to_save // 4)
 
-        for epoch in range(epochs):
+        for epoch in range(self.epoch, epochs+1):
             print("\nEpoch {}".format(epoch + 1))
             for i, batch in enumerate(dataloader):
                 self.train_batch(batch)

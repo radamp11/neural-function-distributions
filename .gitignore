@@ -1,0 +1,10 @@
+/datasets/
+/env/
+/trained_models/
+/2023-05-29_14-51_celebahq64_experiment/
+/2023-05-31_22-17_shapenet_voxels_experiment/
+/2023-05-29_15-12_celebahq64_experiment/
+/2023-05-30_11-07_celebahq128_experiment/
+/.ipynb_checkpoints/
+/2023-05-31_22-31_shapenet_point_clouds_experiment/
+/2023-05-31_22-35_shapenet_voxels_experiment/
