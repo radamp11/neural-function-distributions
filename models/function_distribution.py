@@ -261,13 +261,20 @@ def load_function_distribution(device, path):
     encoding = config_rep["encoding"].to(device)
     if hasattr(encoding, 'frequency_matrix'):
         encoding.frequency_matrix = encoding.frequency_matrix.to(device)
-    function_representation = FunctionRepresentation(config_rep["coordinate_dim"],
-                                                     config_rep["feature_dim"],
+    function_representation = FunctionRepresentation(config_rep["input_dim"],
+                                                     config_rep["output_dim"],
                                                      config_rep["layer_sizes"],
                                                      encoding,
                                                      config_rep["non_linearity"],
                                                      config_rep["final_non_linearity"]).to(device)
-    # Initialize hypernetwork
+
+    # function_representation = FunctionRepresentation(config_rep["coordinate_dim"],
+    #                                                  config_rep["feature_dim"],
+    #                                                  config_rep["layer_sizes"],
+    #                                                  encoding,
+    #                                                  config_rep["non_linearity"],
+    #                                                  config_rep["final_non_linearity"]).to(device)
+    # # Initialize hypernetwork
     config_hyp = config["hypernetwork"]
     hypernetwork = HyperNetwork(function_representation, config_hyp["latent_dim"],
                                 config_hyp["layer_sizes"], config_hyp["non_linearity"]).to(device)

@@ -3,7 +3,7 @@ import torch
 from data.conversion import GridDataConverter, PointCloudDataConverter
 from data.dataloaders3d import VoxelDataset
 from models.function_representation import FourierFeatures
-from models.function_distribution import load_function_distribution
+from checkpoint.checkpoint_training import load_function_distribution_and_optimizer
 from torchvision.utils import save_image
 from viz.render import voxels_to_torch3d_mesh, voxels_to_cubified_mesh, render_mesh
 
@@ -44,7 +44,11 @@ num_batches = int((args.num_samples - 0.5) // args.batch_size) + 1
 all_images = []
 
 # Load a model
-func_dist = load_function_distribution(device, args.model_path)
+checkpoint = torch.load(args.model_path, map_location=device)
+
+epoch = checkpoint['epoch']
+
+func_dist, _ = load_function_distribution_and_optimizer(device, checkpoint['function_distributrion'])
 # Set up data converter
 if args.point_cloud:
     data_converter = PointCloudDataConverter(device, (1,) + (args.model_resolution,) * 3, normalize_features=True)
@@ -72,7 +76,7 @@ for i in range(num_batches):
             # Threshold to create voxels
             voxels = [(sample > args.threshold).detach().float().to(device) for sample in samples]
         else:
-            samples = func_dist.sample_data(data_converter, num_samples=args.batch_size, 
+            samples = func_dist.sample_data(data_converter, num_samples=args.batch_size,
                                             resolution=(args.resolution,) * 3)
             # If point clouds, convert to voxels for marching cubes algorithm
             if args.point_cloud:

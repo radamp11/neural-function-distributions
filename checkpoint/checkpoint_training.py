@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import torch
+
+from checkpoint.custom_training import CustomTrainer
 from data.conversion import GridDataConverter, PointCloudDataConverter, ERA5Converter
 from data.dataloaders import mnist, celebahq
 from data.dataloaders_era5 import era5
@@ -12,7 +14,42 @@ from models.function_distribution import HyperNetwork, FunctionDistribution
 from models.function_representation import FunctionRepresentation, FourierFeatures
 
 from models.function_distribution import load_function_distribution
-from custom_training import CustomTrainer
+
+
+def load_function_distribution_and_optimizer(device, checkpoint, config_file=None):
+    """
+    """
+    config, state_dict = checkpoint["config"], checkpoint["state_dict"]
+    # Initialize function representation
+    config_rep = config["function_representation"]
+    encoding = config_rep["encoding"].to(device)
+    if hasattr(encoding, 'frequency_matrix'):
+        encoding.frequency_matrix = encoding.frequency_matrix.to(device)
+    function_representation = FunctionRepresentation(config_rep["coordinate_dim"],
+                                                     config_rep["feature_dim"],
+                                                     config_rep["layer_sizes"],
+                                                     encoding,
+                                                     config_rep["non_linearity"],
+                                                     config_rep["final_non_linearity"]).to(device)
+    # Initialize hypernetwork
+    config_hyp = config["hypernetwork"]
+    hypernetwork = HyperNetwork(function_representation, config_hyp["latent_dim"],
+                                config_hyp["layer_sizes"], config_hyp["non_linearity"]).to(device)
+    # Initialize function distribution
+    function_distribution = FunctionDistribution(hypernetwork).to(device)
+    # Load weights of function distribution
+    function_distribution.load_state_dict(state_dict)
+
+    if config_file is not None:
+        optimizer = torch.optim.Adam(
+            function_distribution.hypernetwork.forward_layers.parameters(),
+            lr=config_file['training']['lr'], betas=(0.5, 0.999)
+        )
+        optimizer.load_state_dict(checkpoint['optimizer'])
+    else:
+        optimizer = None
+
+    return function_distribution, optimizer
 
 
 class CheckpointTrainer:
@@ -24,40 +61,7 @@ class CheckpointTrainer:
     def count_parameters(self, model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    def _load_function_distribution_and_optimizer(self, device, checkpoint, config_file):
-        """
-        """
-        config, state_dict = checkpoint["config"], checkpoint["state_dict"]
-        # Initialize function representation
-        config_rep = config["function_representation"]
-        encoding = config_rep["encoding"].to(device)
-        if hasattr(encoding, 'frequency_matrix'):
-            encoding.frequency_matrix = encoding.frequency_matrix.to(device)
-        function_representation = FunctionRepresentation(config_rep["coordinate_dim"],
-                                                         config_rep["feature_dim"],
-                                                         config_rep["layer_sizes"],
-                                                         encoding,
-                                                         config_rep["non_linearity"],
-                                                         config_rep["final_non_linearity"]).to(device)
-        # Initialize hypernetwork
-        config_hyp = config["hypernetwork"]
-        hypernetwork = HyperNetwork(function_representation, config_hyp["latent_dim"],
-                                    config_hyp["layer_sizes"], config_hyp["non_linearity"]).to(device)
-        # Initialize function distribution
-        function_distribution = FunctionDistribution(hypernetwork).to(device)
-        # Load weights of function distribution
-        function_distribution.load_state_dict(state_dict)
-
-        optimizer = torch.optim.Adam(
-            function_distribution.hypernetwork.forward_layers.parameters(),
-            lr=config_file['training']['lr'], betas=(0.5, 0.999)
-        )
-
-        optimizer.load_state_dict(checkpoint['optimizer'])
-
-        return function_distribution, optimizer
-
-    def _load_discriminator_and_optimizer_disc(self, device, checkpoint, config_file):
+    def _load_discriminator_and_optimizer_disc(self, device, checkpoint, config_file, input_dim, output_dim):
 
         discriminator = PointConvDiscriminator(input_dim, output_dim, config_file["discriminator"]["layer_configs"],
                                                linear_layer_sizes=config_file["discriminator"]["linear_layer_sizes"],
@@ -67,9 +71,11 @@ class CheckpointTrainer:
                                                add_weightnet_batchnorm=config_file["discriminator"][
                                                    "add_weightnet_batchnorm"],
                                                deterministic=config_file["discriminator"]["deterministic"],
-                                               same_coordinates=config_file["discriminator"]["same_coordinates"]).to(device)
+                                               same_coordinates=config_file["discriminator"]["same_coordinates"]).to(
+            device)
 
         discriminator.load_state_dict(checkpoint['state_dict'])
+        # discriminator.load_state_dict(checkpoint['model'])
 
         optimizer_disc = torch.optim.Adam(
             discriminator.parameters(), lr=config_file['training']['lr'], betas=(0.5, 0.999)
@@ -87,7 +93,8 @@ class CheckpointTrainer:
             config = json.load(f)
 
         if config["path_to_data"] == "":
-            raise (RuntimeError("Path to data not specified. Modify path_to_data attribute in config to point to data."))
+            raise (
+                RuntimeError("Path to data not specified. Modify path_to_data attribute in config to point to data."))
 
         # Create a folder to store experiment results
         timestamp = time.strftime("%Y-%m-%d_%H-%M")
@@ -154,12 +161,16 @@ class CheckpointTrainer:
         else:
             data_converter = GridDataConverter(device, data_shape, normalize_features=True)
 
+        checkpoint = torch.load('{}/training_checkpoint_{}.pt'.format(self.path_to_model, self.model_idx), map_location=device)
 
-        checkpoint = torch.load('{}/training_checkpoint_{}.pt'.format(self.path_to_model, self.model_idx))
+        epoch = checkpoint['epoch']
 
-        func_dist, optimizer = self._load_function_distribution_and_optimizer(device, checkpoint['function_distributrion'], config)
+        func_dist, optimizer = load_function_distribution_and_optimizer(device,
+                                                                             checkpoint['function_distributrion'],
+                                                                             config)
 
-        discriminator, optimizer_disc = self._load_discriminator_and_optimizer_disc(device, checkpoint['discriminator'], config)
+        discriminator, optimizer_disc = self._load_discriminator_and_optimizer_disc(device, checkpoint['discriminator'],
+                                                                                    config, input_dim, output_dim)
 
         func_dist.eval()
         func_dist.train()
@@ -176,13 +187,14 @@ class CheckpointTrainer:
         print("Number of parameters: {}".format(self.count_parameters(discriminator)))
 
         # Setup trainer
-        trainer = CustomTrainer(device, func_dist, optimizer=optimizer, discriminator, optimizer_disc=optimizer_disc,
-                          data_converter, epoch,
-                          lr=config["training"]["lr"], lr_disc=config["training"]["lr_disc"],
-                          r1_weight=config["training"]["r1_weight"],
-                          max_num_points=config["training"]["max_num_points"],
-                          print_freq=config["training"]["print_freq"], save_dir=directory,
-                          model_save_freq=config["training"]["model_save_freq"],
-                          is_voxel=is_voxel, is_point_cloud=is_point_cloud,
-                          is_era5=is_era5)
+        trainer = CustomTrainer(device=device, function_distribution=func_dist, optimizer=optimizer,
+                                discriminator=discriminator, optimizer_disc=optimizer_disc,
+                                data_converter=data_converter, epoch=epoch,
+                                lr=config["training"]["lr"], lr_disc=config["training"]["lr_disc"],
+                                r1_weight=config["training"]["r1_weight"],
+                                max_num_points=config["training"]["max_num_points"],
+                                print_freq=config["training"]["print_freq"], save_dir=directory,
+                                model_save_freq=config["training"]["model_save_freq"],
+                                is_voxel=is_voxel, is_point_cloud=is_point_cloud,
+                                is_era5=is_era5)
         trainer.train(dataloader, config["training"]["epochs"])

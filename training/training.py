@@ -142,7 +142,7 @@ class Trainer():
                     'optimizer': self.optimizer.state_dict()
                 },
                 'discriminator': {
-                    'model': self.discriminator.state_dict(),
+                    'state_dict': self.discriminator.state_dict(),
                     'optimizer': self.optimizer_disc.state_dict()
                 }
             }, path + '/training_checkpoint_{}.pt'.format(epoch))
